@@ -20,9 +20,10 @@ nav a:hover{color:var(--txt)}
 /* ── 크로매틱 인덱스 필드 (첫 화면 전체) ── */
 .field{position:relative;width:100%;height:min(78vh,780px);min-height:460px;overflow:hidden;background:#0a0a0c}
 .amb{position:absolute;border-radius:50%;pointer-events:none}
-.rdot{position:absolute;border-radius:50%;overflow:hidden;cursor:pointer;transform:translate(-50%,-50%);
-  clip-path:circle(50%);transition:transform .15s ease,box-shadow .15s ease;box-shadow:0 0 0 rgba(0,0,0,0)}
-.rdot img{width:100%;height:100%;object-fit:cover;display:block}
+.rdot{position:absolute;border-radius:50%;overflow:hidden;cursor:grab;transform:translate(-50%,-50%);
+  clip-path:circle(50%);transition:transform .15s ease,box-shadow .15s ease;box-shadow:0 0 0 rgba(0,0,0,0);
+  user-select:none;-webkit-user-drag:none}
+.rdot img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
 .rdot:hover{transform:translate(-50%,-50%) scale(1.65);z-index:550!important}
 .rdot.vid{display:flex;align-items:center;justify-content:center}
 .rdot.vid span{pointer-events:none;line-height:1}
@@ -107,12 +108,12 @@ footer{color:var(--sub);text-align:center;font-size:.85rem;margin:60px 0 30px}
     </div>
   </div>
   <button class="panelShow" id="panelShow" onclick="togglePanel(true)">☰ 정보 다시 보기</button>
-  <div class="hint">MOUSE OVER TO PREVIEW · CLICK TO JUMP</div>
+  <div class="hint">HOVER TO PREVIEW · CLICK TO JUMP · DRAG TO MOVE</div>
   <div class="tip" id="tip"><div class="th" id="tipTh"></div><div class="tx"><div class="ti" id="tipTi"></div><div class="dt" id="tipDt"></div><div class="mt" id="tipMt"></div></div></div>
 </div>
 
 <div class="legend">
-<span>점 하나 = 글 하나</span><span>크기 = 글 길이(7~100px)</span><span>색 = 시간의 흐름</span>
+<span>점 하나 = 글 하나 (드래그로 옮기기 가능)</span><span>크기 = 글 길이(4~50px)</span><span>색 = 시간의 흐름</span>
 <span><i style="background:hsl(24,80%,55%)"></i>초반</span>
 <span><i style="background:hsl(200,75%,55%)"></i>최근</span>
 <span>▶ 영상</span>
@@ -160,10 +161,10 @@ for(let i=0;i<AMB_N;i++){
   field.appendChild(a);
 }
 
-/* 글 길이 → 크기 정규화 (95백분위 기준, 7~100px) */
+/* 글 길이 → 크기 정규화 (95백분위 기준, 원래 7~100px에서 50% 축소해 3.5~50px) */
 const lens=POSTS.map(p=>p.text.length).slice().sort((a,b)=>a-b);
 const p95=lens[Math.min(lens.length-1,Math.floor(lens.length*0.95))]||1;
-function sizeFor(len){const t=Math.min(len,p95)/p95;return Math.round(7+t*93)}
+function sizeFor(len){const t=Math.min(len,p95)/p95;return Math.round((7+t*93)*0.5)}
 
 /* 패널이 차지하는 가로 비율(대략) - 패널과 겹치는 구간의 점은 패널 아래쪽으로 배치해 가려지거나 클릭이 막히지 않게 함 */
 const panelFrac=Math.min(60,Math.max(30,(560/field.clientWidth)*100+6));
@@ -177,15 +178,15 @@ POSTS.forEach((p,i)=>{
   const img=(p.media||[]).find(m=>m.type==='image');
   const vid=(p.media||[]).find(m=>m.type==='video');
   if(img){
-    s=Math.max(s,20);
-    d.style.border=`2px solid hsl(${hue},75%,58%)`;
-    d.innerHTML=`<img loading="lazy" src="${esc(img.src)}" alt="">`;
+    s=Math.max(s,10);
+    d.style.border=`1.5px solid hsl(${hue},75%,58%)`;
+    d.innerHTML=`<img loading="lazy" src="${esc(img.src)}" alt="" draggable="false">`;
   }else if(vid){
-    s=Math.max(s,20);
+    s=Math.max(s,10);
     d.classList.add('vid');
     d.style.background=`hsl(${hue},45%,18%)`;
-    d.style.border=`2px solid hsl(${hue},80%,60%)`;
-    d.innerHTML=`<span style="color:hsl(${hue},85%,72%);font-size:${Math.max(9,s*.38)}px">▶</span>`;
+    d.style.border=`1.5px solid hsl(${hue},80%,60%)`;
+    d.innerHTML=`<span style="color:hsl(${hue},85%,72%);font-size:${Math.max(7,s*.38)}px">▶</span>`;
   }else{
     d.style.background=`hsl(${hue},60%,50%)`;
     d.style.opacity=.82;
@@ -204,7 +205,38 @@ POSTS.forEach((p,i)=>{
     tip.style.left=lx+'%';tip.style.top=(ly+4)+'%';tip.style.opacity=1;
   };
   d.onmouseleave=()=>tip.style.opacity=0;
-  d.onclick=()=>{const el=document.getElementById('post-'+i);if(el){el.scrollIntoView({behavior:'smooth',block:'center'});el.classList.add('flash');setTimeout(()=>el.classList.remove('flash'),1600)}};
+
+  /* ── 드래그로 점 위치 옮기기 (겹친 점을 손으로 떼어놓을 수 있도록) ── */
+  d.style.touchAction='none';
+  let dragging=false,moved=false,startX=0,startY=0,startLeft=0,startTop=0;
+  d.addEventListener('pointerdown',(e)=>{
+    e.preventDefault();
+    dragging=true;moved=false;
+    startX=e.clientX;startY=e.clientY;
+    startLeft=parseFloat(d.style.left);startTop=parseFloat(d.style.top);
+    d.setPointerCapture(e.pointerId);
+    d.style.cursor='grabbing';d.style.zIndex=9999;
+    tip.style.opacity=0;
+  });
+  d.addEventListener('pointermove',(e)=>{
+    if(!dragging)return;
+    const dx=e.clientX-startX,dy=e.clientY-startY;
+    if(Math.abs(dx)>3||Math.abs(dy)>3)moved=true;
+    const fr=field.getBoundingClientRect();
+    let nl=startLeft+(dx/fr.width)*100, nt=startTop+(dy/fr.height)*100;
+    nl=Math.max(0,Math.min(100,nl));nt=Math.max(0,Math.min(100,nt));
+    d.style.left=nl+'%';d.style.top=nt+'%';
+  });
+  const endDrag=()=>{
+    if(!dragging)return;
+    dragging=false;d.style.cursor='grab';
+    if(!moved){
+      const el=document.getElementById('post-'+i);
+      if(el){el.scrollIntoView({behavior:'smooth',block:'center'});el.classList.add('flash');setTimeout(()=>el.classList.remove('flash'),1600)}
+    }
+  };
+  d.addEventListener('pointerup',endDrag);
+  d.addEventListener('pointercancel',endDrag);
   field.appendChild(d);
 });
 
