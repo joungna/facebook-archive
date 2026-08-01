@@ -75,7 +75,11 @@ h1.big .o{color:var(--acc)}
 .meta{color:var(--sub);font-size:.9rem;margin:18px 4px}
 .post{background:var(--card);border:1px solid var(--line);border-radius:4px;padding:26px 28px;margin:16px 0}
 .post.flash{border-color:var(--acc)}
+.post-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .post .date{color:var(--acc);font-size:.85rem;letter-spacing:.15em}
+.toTop{color:var(--sub);background:none;border:1px solid #3a3a42;padding:5px 12px;font-size:.75rem;
+  letter-spacing:.05em;cursor:pointer;font-family:inherit;border-radius:2px;white-space:nowrap;flex:none}
+.toTop:hover{color:var(--acc);border-color:var(--acc)}
 .post .body{margin-top:12px;white-space:pre-wrap;word-break:break-word}
 .gallery{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
 .gallery img{max-width:100%;width:auto;max-height:420px;cursor:zoom-in;border:1px solid var(--line)}
@@ -138,6 +142,7 @@ function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g
 function hl(s,kw){if(!kw)return esc(s);const r=new RegExp('('+kw.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi');return esc(s).replace(r,'<mark>$1</mark>')}
 function focusSearch(e){e.preventDefault();q.scrollIntoView({behavior:'smooth',block:'center'});setTimeout(()=>q.focus(),500)}
 function zoom(src){document.getElementById('lbimg').src=src;document.getElementById('lb').classList.add('on')}
+function scrollToTop(){window.scrollTo({top:0,behavior:'smooth'})}
 
 /* ── 좌상단 제목 패널 토글 (클릭으로 숨김/재표시) ── */
 const panelEl=document.getElementById('panel'),panelShowBtn=document.getElementById('panelShow');
@@ -256,7 +261,7 @@ function render(kw){
   list.innerHTML=hits.map(o=>{
     const p=o.p;
     return `<article class="post" id="post-${o.i}">
-      <div class="date">${p.date}</div>
+      <div class="post-head"><div class="date">${p.date}</div><button class="toTop" onclick="scrollToTop()" title="맨 위로">↑ 맨 위로</button></div>
       <div class="body">${hl(p.text,kw)}</div>
       ${gallery(p)}
       ${p.links.length?'<div class="links">'+p.links.map(l=>`<a href="${esc(l)}" target="_blank" rel="noopener">🔗 ${esc(l)}</a>`).join('')+'</div>':''}
