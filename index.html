@@ -774,6 +774,18 @@ function jumpToPost(id){
 applyView();
 syncFilterUI();
 applyFilters();
+
+/* ── 외부 링크(#post-N) 딥링크 지원: 블로그 등에서 원문 링크로 진입 시 해당 글로 이동 ── */
+(function(){
+  const h=location.hash.match(/^#post-(\d+)$/);
+  if(h){
+    const id=parseInt(h[1],10);
+    if(POSTS[id]){
+      togglePanel(true);
+      setTimeout(()=>jumpToPost(id),150);
+    }
+  }
+})();
 </script>
 </body>
 </html>
