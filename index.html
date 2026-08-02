@@ -40,6 +40,11 @@ nav a:hover{color:var(--txt)}
   border-radius:4px;cursor:pointer;font-family:inherit;margin-left:auto}
 .freset:hover{background:var(--acc);color:#111}
 .fcount{color:var(--sub);font-size:.8rem}
+.viewToggle{display:flex;gap:6px}
+.vtbtn{background:var(--card);border:1px solid #3a3a42;color:var(--sub);padding:7px 13px;border-radius:20px;
+  font-size:.8rem;cursor:pointer;font-family:inherit}
+.vtbtn:hover{color:var(--txt);border-color:var(--acc)}
+.vtbtn.active{background:var(--acc);border-color:var(--acc);color:#111;font-weight:500}
 
 /* ── 크로매틱 인덱스 필드 (첫 화면 전체) ── */
 .field{position:relative;width:100%;height:min(78vh,780px);min-height:460px;overflow:hidden;background:#0a0a0c;touch-action:none;cursor:grab}
@@ -59,6 +64,14 @@ nav a:hover{color:var(--txt)}
 .cluster:hover{transform:translate(-50%,-50%) scale(1.08)}
 .cluster .cm{font-weight:500;letter-spacing:.02em;pointer-events:none}
 .cluster .cn{opacity:.85;pointer-events:none}
+.edgeSvg{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;display:none}
+.edgeSvg line{stroke:rgba(255,140,66,.3)}
+.taghub{position:absolute;border-radius:50%;transform:translate(-50%,-50%);display:flex;flex-direction:column;
+  align-items:center;justify-content:center;cursor:pointer;user-select:none;touch-action:none;
+  border:2px solid rgba(255,255,255,.5);box-shadow:0 8px 22px rgba(0,0,0,.5);z-index:400;transition:transform .15s ease}
+.taghub:hover{transform:translate(-50%,-50%) scale(1.08)}
+.taghub .tm{font-weight:600;letter-spacing:.02em;pointer-events:none;color:#fff}
+.taghub .tc{opacity:.85;pointer-events:none;color:#fff}
 .panel{position:absolute;left:0;top:0;max-width:560px;padding:34px 34px 30px;z-index:600;
   background:linear-gradient(120deg,rgba(8,8,10,.93) 55%,rgba(8,8,10,.55) 85%,rgba(8,8,10,0));pointer-events:none}
 .panel .panelClose,.panel .btn,.panel .ghost{pointer-events:auto}
@@ -158,6 +171,10 @@ footer{color:var(--sub);text-align:center;font-size:.85rem;margin:30px 0 30px}
   </select>
   <span class="flabel">태그</span>
   <select id="tagSel"><option value="">전체</option></select>
+  <div class="viewToggle">
+    <button class="vtbtn active" id="vtTime" onclick="setMode('time')" title="시간축 지도">🕐 시간축</button>
+    <button class="vtbtn" id="vtNet" onclick="setMode('network')" title="태그 네트워크">🕸 네트워크</button>
+  </div>
   <span class="fcount" id="fcount"></span>
   <button class="freset" id="freset" onclick="resetFilters()">필터 초기화</button>
 </div>
@@ -165,6 +182,7 @@ footer{color:var(--sub);text-align:center;font-size:.85rem;margin:30px 0 30px}
 <div class="field" id="field">
   <div class="fieldInner" id="fieldInner">
     <div id="ambLayer"></div>
+    <svg id="edgeSvg" class="edgeSvg" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
     <div id="nodesLayer"></div>
   </div>
   <div class="panel" id="panel">
@@ -194,6 +212,7 @@ footer{color:var(--sub);text-align:center;font-size:.85rem;margin:30px 0 30px}
 <span><i style="background:hsl(24,80%,55%)"></i>초반</span>
 <span><i style="background:hsl(200,75%,55%)"></i>최근</span>
 <span>▶ 영상 · ● 원 = 월별 묶음(클릭 시 확대)</span>
+<span>🕸 네트워크 보기: 굵은 원 = 주요 태그 · 선 = 태그로 연결된 글</span>
 </div>
 
 <div class="wrap">
@@ -211,7 +230,7 @@ POSTS.forEach((p,i)=>{p._id=i;p._searchText=(p.text+' '+(p.tags||[]).join(' ')).
 
 const list=document.getElementById('list'),q=document.getElementById('q'),
 meta=document.getElementById('meta'),field=document.getElementById('field'),fieldInner=document.getElementById('fieldInner'),
-ambLayer=document.getElementById('ambLayer'),nodesLayer=document.getElementById('nodesLayer'),
+ambLayer=document.getElementById('ambLayer'),nodesLayer=document.getElementById('nodesLayer'),edgeSvg=document.getElementById('edgeSvg'),
 tip=document.getElementById('tip'),tipTh=document.getElementById('tipTh'),tipTi=document.getElementById('tipTi'),
 tipDt=document.getElementById('tipDt'),tipMt=document.getElementById('tipMt'),sentinel=document.getElementById('sentinel'),
 monthbar=document.getElementById('monthbar'),yearSel=document.getElementById('yearSel'),typeSel=document.getElementById('typeSel'),
@@ -250,6 +269,7 @@ MONTHS.forEach(m=>{
 
 const filters={month:null,year:'',type:'',tag:''};
 let filteredIdx=POSTS.map((p,i)=>i);
+let mode='time'; // 'time' | 'network'
 
 function syncFilterUI(){
   document.querySelectorAll('.mchip').forEach(b=>b.classList.toggle('active',b.dataset.m===filters.month));
@@ -271,7 +291,7 @@ function applyFilters(){
     filteredIdx.push(i);
   }
   fcount.textContent=`${filteredIdx.length}편 표시 중`;
-  renderField();
+  renderCurrentMode();
   resetListRender();
 }
 
@@ -283,7 +303,9 @@ function focusMonth(m){
   filters.month=(filters.month===m)?null:m;
   filters.year=filters.month?filters.month.slice(0,4):filters.year;
   syncFilterUI();applyFilters();
-  if(filters.month){zoomToMonth(filters.month)}else{resetView()}
+  if(mode==='time'){
+    if(filters.month){zoomToMonth(filters.month)}else{resetView()}
+  }
 }
 yearSel.onchange=()=>{filters.year=yearSel.value;filters.month=null;syncFilterUI();applyFilters();resetView()};
 typeSel.onchange=()=>{filters.type=typeSel.value;syncFilterUI();applyFilters()};
@@ -360,7 +382,7 @@ field.addEventListener('wheel',e=>{
 
 let panState=null;
 field.addEventListener('pointerdown',e=>{
-  if(e.target.closest('.rdot,.cluster,.panelClose,.panelShow,.zbtn'))return;
+  if(e.target.closest('.rdot,.cluster,.taghub,.panelClose,.panelShow,.zbtn'))return;
   panState={x:e.clientX,y:e.clientY,tx:view.tx,ty:view.ty};
   field.setPointerCapture(e.pointerId);
   field.classList.add('panning');
@@ -375,13 +397,14 @@ function endPan(){if(panState){panState=null;field.classList.remove('panning')}}
 field.addEventListener('pointerup',endPan);
 field.addEventListener('pointercancel',endPan);
 field.addEventListener('dblclick',e=>{
-  if(e.target.closest('.rdot,.cluster'))return;
+  if(e.target.closest('.rdot,.cluster,.taghub'))return;
   const r=field.getBoundingClientRect();
   zoomAt(e.clientX-r.left,e.clientY-r.top,1.6);
 });
 
 let lastClusterMode=null;
 function maybeRerenderField(){
+  if(mode!=='time')return;
   const monthsInView=new Set(filteredIdx.map(i=>POSTS[i].month));
   const doCluster=view.scale<CLUSTER_ZOOM && monthsInView.size>1;
   if(doCluster!==lastClusterMode){renderField()}
@@ -494,6 +517,201 @@ function renderField(){
   lastClusterMode=doCluster;
   if(doCluster){renderClusters(monthsInView)}else{renderDots(filteredIdx)}
 }
+
+/* ══════════════════════ 태그 네트워크 그래프 모드 (Force-Directed) ══════════════════════ */
+const HUB_TAGS=ALL_TAGS.slice(0,8); // 주요 태그만 허브로 연결
+const HUB_HUES={};HUB_TAGS.forEach((t,i)=>HUB_HUES[t]=Math.round(i*(340/Math.max(1,HUB_TAGS.length))));
+let netNodes=[],netEdges=[],netById={},fieldW=0,fieldH=0,simRAF=null;
+
+function setMode(m){
+  if(mode===m)return;
+  mode=m;
+  document.getElementById('vtTime').classList.toggle('active',m==='time');
+  document.getElementById('vtNet').classList.toggle('active',m==='network');
+  edgeSvg.style.display=m==='network'?'block':'none';
+  stopSim();
+  resetView();
+  renderCurrentMode();
+}
+function renderCurrentMode(){
+  if(mode==='time'){edgeSvg.innerHTML='';renderField();}
+  else{initNetwork();startSim();}
+}
+
+function initNetwork(){
+  const r=field.getBoundingClientRect();
+  fieldW=r.width;fieldH=r.height;
+  netNodes=[];netEdges=[];netById={};
+  const hubCount={};
+  filteredIdx.forEach(i=>{POSTS[i].tags.forEach(t=>{if(HUB_TAGS.includes(t))hubCount[t]=(hubCount[t]||0)+1})});
+  const activeHubs=HUB_TAGS.filter(t=>hubCount[t]>0);
+  activeHubs.forEach((t,idx)=>{
+    const ang=(idx/Math.max(1,activeHubs.length))*Math.PI*2;
+    const cx=fieldW/2,cy=fieldH/2,rad=Math.min(fieldW,fieldH)*0.28;
+    const node={id:'tag:'+t,type:'tag',tag:t,count:hubCount[t],
+      x:cx+Math.cos(ang)*rad,y:cy+Math.sin(ang)*rad,vx:0,vy:0,fixed:false,
+      r:Math.max(26,Math.min(60,20+Math.sqrt(hubCount[t])*7))};
+    netById[node.id]=netNodes.length;netNodes.push(node);
+  });
+  filteredIdx.forEach(i=>{
+    const p=POSTS[i];
+    const myHubs=p.tags.filter(t=>activeHubs.includes(t));
+    let sx=fieldW/2+(Math.random()-0.5)*fieldW*0.7, sy=fieldH/2+(Math.random()-0.5)*fieldH*0.7;
+    if(myHubs.length){
+      const h=netNodes[netById['tag:'+myHubs[0]]];
+      sx=h.x+(Math.random()-0.5)*70;sy=h.y+(Math.random()-0.5)*70;
+    }
+    const node={id:'post:'+i,type:'post',postIdx:i,x:sx,y:sy,vx:0,vy:0,fixed:false,
+      r:Math.max(6,sizeFor(p.text.length)/2)};
+    netById[node.id]=netNodes.length;netNodes.push(node);
+    myHubs.forEach(t=>netEdges.push({a:netById[node.id],b:netById['tag:'+t]}));
+  });
+  buildNetworkDOM();
+}
+
+function buildNetworkDOM(){
+  nodesLayer.innerHTML='';
+  netNodes.forEach(node=>{
+    if(node.type==='tag'){
+      const hue=HUB_HUES[node.tag];
+      const el=document.createElement('div');el.className='taghub';
+      el.style.width=node.r*2+'px';el.style.height=node.r*2+'px';
+      el.style.background=`radial-gradient(circle at 35% 30%, hsl(${hue},70%,45%), hsl(${hue},70%,22%))`;
+      el.innerHTML=`<span class="tm" style="font-size:${Math.max(10,node.r*.28)}px">#${esc(node.tag)}</span>`+
+        `<span class="tc" style="font-size:${Math.max(8,node.r*.2)}px">${node.count}편</span>`;
+      el.onmouseenter=()=>{
+        const lx=node.x/fieldW*100,ly=node.y/fieldH*100;
+        showTip(lx,ly,hue,`hsl(${hue},55%,30%)`,`#${node.tag}`,`${node.count}편과 연결됨`,'태그 허브 · 클릭하면 이 태그로 필터링');
+      };
+      el.onmouseleave=()=>tip.style.opacity=0;
+      el.addEventListener('pointerdown',e=>e.stopPropagation());
+      el.onclick=()=>setTagFilter(node.tag);
+      node.el=el;
+      nodesLayer.appendChild(el);
+    }else{
+      const p=POSTS[node.postIdx];
+      const myHubs=p.tags.filter(t=>HUB_TAGS.includes(t));
+      const hue=myHubs.length?HUB_HUES[myHubs[0]]:208;
+      const s=node.r*2;
+      const el=document.createElement('div');el.className='rdot';el.dataset.id=node.postIdx;
+      const img=p.media.find(m=>m.type==='image');
+      const vid=p.media.find(m=>m.type==='video');
+      if(img){
+        el.style.border=`1.5px solid hsl(${hue},75%,58%)`;
+        el.innerHTML=`<img loading="lazy" src="${esc(img.src)}" alt="" draggable="false">`;
+      }else if(vid){
+        el.classList.add('vid');
+        el.style.background=`hsl(${hue},45%,18%)`;
+        el.style.border=`1.5px solid hsl(${hue},80%,60%)`;
+        el.innerHTML=`<span style="color:hsl(${hue},85%,72%);font-size:${Math.max(7,s*.38)}px">▶</span>`;
+      }else{
+        el.style.background=`hsl(${hue},55%,48%)`;
+        el.style.opacity=.85;
+      }
+      el.style.width=s+'px';el.style.height=s+'px';
+      el.style.zIndex=String(500-Math.round(s));
+      el.onmouseenter=()=>{
+        const lx=node.x/fieldW*100,ly=node.y/fieldH*100;
+        const th=img?`url(${esc(img.src)}) center/cover`:(vid?`hsl(${hue},45%,18%)`:`hsl(${hue},60%,45%)`);
+        const mCount=p.media.length,lCount=p.links.length;
+        showTip(lx,ly,hue,th,p.text.slice(0,60).replace(/\n+/g,' ')+(p.text.length>60?'…':''),p.date,
+          `${p.text.length}자`+(mCount?` · 미디어 ${mCount}개`:'')+(lCount?` · 링크 ${lCount}개`:''));
+      };
+      el.onmouseleave=()=>tip.style.opacity=0;
+      el.style.touchAction='none';
+      let dragging=false,moved=false,startX=0,startY=0;
+      el.addEventListener('pointerdown',(e)=>{
+        e.preventDefault();e.stopPropagation();
+        dragging=true;moved=false;startX=e.clientX;startY=e.clientY;
+        el.setPointerCapture(e.pointerId);el.style.cursor='grabbing';el.style.zIndex=9999;
+        node.fixed=true;node.vx=0;node.vy=0;
+        tip.style.opacity=0;
+      });
+      el.addEventListener('pointermove',(e)=>{
+        if(!dragging)return;
+        const dx=(e.clientX-startX)/view.scale, dy=(e.clientY-startY)/view.scale;
+        if(Math.abs(dx)>3||Math.abs(dy)>3)moved=true;
+        node.x=Math.max(node.r,Math.min(fieldW-node.r,node.x+dx));
+        node.y=Math.max(node.r,Math.min(fieldH-node.r,node.y+dy));
+        startX=e.clientX;startY=e.clientY;
+      });
+      const endDrag=()=>{
+        if(!dragging)return;
+        dragging=false;el.style.cursor='grab';
+        if(!moved)jumpToPost(node.postIdx);
+      };
+      el.addEventListener('pointerup',endDrag);
+      el.addEventListener('pointercancel',endDrag);
+      node.el=el;
+      nodesLayer.appendChild(el);
+    }
+  });
+  edgeSvg.innerHTML=netEdges.map(()=>'<line x1="0" y1="0" x2="0" y2="0" stroke-width="0.15"/>').join('');
+}
+
+function physicsStep(){
+  const n=netNodes.length;
+  const REPULSE=6000,SPRING=0.02,LINK_DIST=95,DAMP=0.85,CENTER=0.0012,WANDER=2.2;
+  for(let i=0;i<n;i++){netNodes[i].fx=0;netNodes[i].fy=0}
+  for(let i=0;i<n;i++){
+    const ni=netNodes[i];
+    for(let j=i+1;j<n;j++){
+      const nj=netNodes[j];
+      const dx=ni.x-nj.x,dy=ni.y-nj.y;
+      const d2=dx*dx+dy*dy+1,d=Math.sqrt(d2);
+      const force=REPULSE/d2;
+      const ux=dx/d,uy=dy/d;
+      ni.fx+=ux*force;ni.fy+=uy*force;
+      nj.fx-=ux*force;nj.fy-=uy*force;
+    }
+  }
+  netEdges.forEach(e=>{
+    const a=netNodes[e.a],b=netNodes[e.b];
+    const dx=b.x-a.x,dy=b.y-a.y;
+    const d=Math.sqrt(dx*dx+dy*dy)||1;
+    const f=(d-LINK_DIST)*SPRING;
+    const ux=dx/d,uy=dy/d;
+    a.fx+=ux*f;a.fy+=uy*f;
+    b.fx-=ux*f;b.fy-=uy*f;
+  });
+  for(let i=0;i<n;i++){
+    const node=netNodes[i];
+    if(node.fixed){node.vx=0;node.vy=0;continue}
+    node.fx+=(fieldW/2-node.x)*CENTER;
+    node.fy+=(fieldH/2-node.y)*CENTER;
+    node.fx+=(Math.random()-0.5)*WANDER;
+    node.fy+=(Math.random()-0.5)*WANDER;
+    node.vx=(node.vx+node.fx*0.016)*DAMP;
+    node.vy=(node.vy+node.fy*0.016)*DAMP;
+    node.x=Math.max(node.r,Math.min(fieldW-node.r,node.x+node.vx));
+    node.y=Math.max(node.r,Math.min(fieldH-node.r,node.y+node.vy));
+  }
+}
+function updateNetworkDOM(){
+  netNodes.forEach(node=>{
+    const lx=node.x/fieldW*100, ly=node.y/fieldH*100;
+    node.el.style.left=lx+'%';node.el.style.top=ly+'%';
+  });
+  const lines=edgeSvg.children;
+  netEdges.forEach((e,idx)=>{
+    const a=netNodes[e.a],b=netNodes[e.b],line=lines[idx];
+    if(!line)return;
+    line.setAttribute('x1',(a.x/fieldW*100).toFixed(2));
+    line.setAttribute('y1',(a.y/fieldH*100).toFixed(2));
+    line.setAttribute('x2',(b.x/fieldW*100).toFixed(2));
+    line.setAttribute('y2',(b.y/fieldH*100).toFixed(2));
+  });
+}
+function startSim(){
+  if(simRAF)return;
+  const tick=()=>{
+    if(mode!=='network'){simRAF=null;return}
+    physicsStep();updateNetworkDOM();
+    simRAF=requestAnimationFrame(tick);
+  };
+  simRAF=requestAnimationFrame(tick);
+}
+function stopSim(){if(simRAF){cancelAnimationFrame(simRAF);simRAF=null}}
 
 /* ══════════════════════ 목록 (점진적/가상 렌더링) ══════════════════════ */
 const BATCH=24;
